@@ -11,10 +11,11 @@
 //------------------------------------------------
 //--- GLOBAL VARIABLES ---------------------------
 //------------------------------------------------
-char    GLBSeriaPortBufferUSB[60]; // a string to hold incoming data usb serial
-char    GLBSeriaPortBufferBT[60]; // a string to hold incoming data usb serial
+#define MAX_INPUT_BUFFER 60
+char    GLBSeriaPortBufferUSB[MAX_INPUT_BUFFER]; // a string to hold incoming data usb serial
+char    GLBSeriaPortBufferBT[MAX_INPUT_BUFFER]; // a string to hold incoming data usb serial
 
-char    GLBauxString[60];
+char    GLBauxString[MAX_INPUT_BUFFER];
 int     GLBSerialPortUSBIx=0;
 int     GLBSerialPortBTIx=0;
 bool    GLBSeriaPortBufferUSBReady = false; // whether the string is complete
@@ -48,7 +49,7 @@ int  GLBtimerBTActivity=-1;
 
 #define MS_TIMER_FUN              5000
 #define MS_TIMER_BT_KEEP_ALIVE    10000
-#define MS_TIMER_BT_ACTIVITY      3000
+#define MS_TIMER_BT_ACTIVITY      1000
 
 
 #define NUM_LEDS  47
@@ -360,7 +361,7 @@ void printString(char *s)
   Serial.print(l);
   Serial.print(F(". Data:"));
 
-  for (int i=0; i < 100; i++) {
+  for (int i=0; i < MAX_INPUT_BUFFER; i++) {
     if (s[i] == 0){
       Serial.println();
       return;
@@ -379,7 +380,7 @@ void printStringBT(char *s)
   bt->print(l);
   bt->print(F(". Data:"));
 
-  for (int i=0; i < 100; i++) {
+  for (int i=0; i < MAX_INPUT_BUFFER; i++) {
     if (s[i] == 0){
       bt->println();
       return;
@@ -395,18 +396,23 @@ void serialEventBT() {
   int inChar=0;
   while (bt->available()) {
 
+     if (GLBSeriaPortBufferBTReady){
+       Serial.println(F("Buffer overrun in BT. Lost char. Unprocessed previous string"));
+       return;
+     }
+
      if (GLBtimerBTActivity==-1)
         GLBtimerBTActivity=GLBtimers.setTimeout((long int)MS_TIMER_BT_ACTIVITY,GLBcallbackTimerBTActivity);
      else
         GLBtimers.restartTimer(GLBtimerBTActivity);
      inChar = bt->read();
-     if (inChar < 0x20) {
+     if ( (inChar < 0x20) || (GLBSerialPortBTIx >= MAX_INPUT_BUFFER)) {
        /*DEBUG Serial.print(F("Char Rx from <0x20"));
        Serial.println(inChar,HEX);*/
-       printStringBT(GLBSeriaPortBufferBT);
        GLBSeriaPortBufferBTReady = true;
        GLBSeriaPortBufferBT[GLBSerialPortBTIx]=0;
-       printString(GLBSeriaPortBufferBT);  //DEBUG 
+       printString(GLBSeriaPortBufferBT);    //DEBUG LOCALLY
+       printStringBT(GLBSeriaPortBufferBT);  //DEBUG REMOTELY
        GLBSerialPortBTIx=0;
        return;
      }
@@ -487,8 +493,9 @@ void loop() {
   } 
   else { 
     // rx bt activity, lets call fastled less aggresively, it disable interrupts 30us per pixel
-    fastled++;
+    /*fastled++;
     if ((fastled%1000)==0) FastLED.show();
+    */
   }
 } 
 
