@@ -6,7 +6,7 @@
 
 
 //-- SOME NEEDED PROTOTYPES ---------------------------
-
+void printStringBT(char *s);
 
 //------------------------------------------------
 //--- GLOBAL VARIABLES ---------------------------
@@ -48,7 +48,7 @@ int  GLBtimerBTKeepAlive=-1;
 int  GLBtimerBTActivity=-1; 
 
 #define MS_TIMER_FUN              5000
-#define MS_TIMER_BT_KEEP_ALIVE    10000
+#define MS_TIMER_BT_KEEP_ALIVE    20000
 #define MS_TIMER_BT_ACTIVITY      1000
 
 
@@ -102,7 +102,7 @@ void GLBcallbackPauseLS(void)
 //------------------------------------------------
 void GLBcallbackTimerFun(void)
 {
-  Serial.println(F("GLBcallbackTimerFun"));
+  //Serial.println(F("GLBcallbackTimerFun"));
 
   if (GLBhelloIndex < HELLO_MESSAGES) return;
   if (!ls.isIdle()) return;
@@ -113,14 +113,16 @@ void GLBcallbackTimerFun(void)
 //------------------------------------------------
 void GLBcallbackTimerBTKeepAlive(void)
 {
-  Serial.println(F("GLBcallbackTimerBTKeepAlive"));
+  //Serial.println(F("GLBcallbackTimerBTKeepAlive"));
   bt->print(":BT");
   bt->println(GLBCrazyLoopCounter);
 }
 //------------------------------------------------
 void GLBcallbackTimerBTActivity(void)
 {
-  Serial.println(F("GLBcallbackTimerBTActivity"));
+  //Serial.println(F("GLBcallbackTimerBTActivity"));
+  char aux[2]={'F',0};
+  printStringBT(aux);
   GLBtimerBTActivity=-1;
 }
 
@@ -138,8 +140,8 @@ void doFun(void)
 {
  int distance = random(1,30);
 
- Serial.print(F("doFUN:"));
- Serial.println(distance);
+ /*Serial.print(F("doFUN:"));
+ Serial.println(distance);*/
 
  if (distance==0) return;
  if (distance>30) return;
@@ -355,12 +357,13 @@ void serialEvent() {
 //------------------------------------------------
 void printString(char *s)
 {
-  Serial.print(F("Full String:"));
+
   int l=strlen(s);
+/*  Serial.print(F("STR:"));
   Serial.print(F(".Len:"));
   Serial.print(l);
   Serial.print(F(". Data:"));
-
+*/
   for (int i=0; i < MAX_INPUT_BUFFER; i++) {
     if (s[i] == 0){
       Serial.println();
@@ -374,11 +377,11 @@ void printString(char *s)
 //------------------------------------------------
 void printStringBT(char *s)
 {
-  bt->print(F("Full String:"));
   int l=strlen(s);
+/*  bt->print(F("STR:"));
   bt->print(F(".Len:"));
   bt->print(l);
-  bt->print(F(". Data:"));
+  bt->print(F(". Data:"));*/
 
   for (int i=0; i < MAX_INPUT_BUFFER; i++) {
     if (s[i] == 0){
@@ -397,14 +400,18 @@ void serialEventBT() {
   while (bt->available()) {
 
      if (GLBSeriaPortBufferBTReady){
-       Serial.println(F("Buffer overrun in BT. Lost char. Unprocessed previous string"));
+       Serial.println(F("Buffer overrun in BT"));//. Lost char. Unprocessed previous string"));
        return;
      }
 
-     if (GLBtimerBTActivity==-1)
+     if (GLBtimerBTActivity==-1){
         GLBtimerBTActivity=GLBtimers.setTimeout((long int)MS_TIMER_BT_ACTIVITY,GLBcallbackTimerBTActivity);
-     else
+        char aux[2]={'X',0};
+        printStringBT(aux);
+     }
+     else {
         GLBtimers.restartTimer(GLBtimerBTActivity);
+     }
      inChar = bt->read();
      if ( (inChar < 0x20) || (GLBSerialPortBTIx >= MAX_INPUT_BUFFER)) {
        /*DEBUG Serial.print(F("Char Rx from <0x20"));
@@ -446,12 +453,16 @@ void processSeriaPortBufferUSB()
 //-------------------------------------------------
 void processSeriaPortBufferBT()
 {
+  serialEventBT();
   if (GLBSeriaPortBufferBTReady){
     strcpy(GLBauxString,GLBSeriaPortBufferBT);
     GLBSeriaPortBufferBT[0]=0;
     GLBSeriaPortBufferBTReady = false;  
-    ls.processCommands(GLBauxString);
+    int aux=ls.processCommands(GLBauxString);
+    Serial.print(F("POK:"));
+    Serial.println(aux);
   }
+  //TODO write in bt char by char from buffer not directly whenever
 }
 
 
@@ -471,9 +482,9 @@ void loop() {
   {
     if (ls.isIdle())
     {
-      Serial.print(F("Halo:"));
+      /*Serial.print(F("Halo:"));
       Serial.println(GLBhelloIndex);
-      Serial.println(bootx[GLBhelloIndex]); 
+      Serial.println(bootx[GLBhelloIndex]); */
       ls.processCommands((char*)bootx[GLBhelloIndex]);
       GLBhelloIndex++; 
       //GLBhelloIndex=(GLBhelloIndex+1)%HELLO_MESSAGES; //TO FORCE INFINITE LOOP
@@ -483,8 +494,8 @@ void loop() {
   GLBtimers.run();
 
   processSeriaPortBufferUSB();
-  serialEventBT();
   processSeriaPortBufferBT();
+
   ls.refresh();
 
   if (GLBtimerBTActivity==-1) { 
