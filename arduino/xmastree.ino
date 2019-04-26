@@ -49,7 +49,7 @@ int  GLBtimerBTActivity=-1;
 
 #define MS_TIMER_FUN              5000
 #define MS_TIMER_BT_KEEP_ALIVE    20000
-#define MS_TIMER_BT_ACTIVITY      1000
+#define MS_TIMER_BT_ACTIVITY      400
 
 
 #define NUM_LEDS  47
@@ -357,9 +357,9 @@ void serialEvent() {
 //------------------------------------------------
 void printString(char *s)
 {
-
+/*
   int l=strlen(s);
-/*  Serial.print(F("STR:"));
+  Serial.print(F("STR:"));
   Serial.print(F(".Len:"));
   Serial.print(l);
   Serial.print(F(". Data:"));
@@ -377,8 +377,8 @@ void printString(char *s)
 //------------------------------------------------
 void printStringBT(char *s)
 {
-  int l=strlen(s);
-/*  bt->print(F("STR:"));
+/*  int l=strlen(s);
+  bt->print(F("STR:"));
   bt->print(F(".Len:"));
   bt->print(l);
   bt->print(F(". Data:"));*/
@@ -397,13 +397,42 @@ void printStringBT(char *s)
 // Call explicitly in loop() 
 void serialEventBT() {
   int inChar=0;
+  bool activity=false;
+  bool debugLocal=false;
+  bool debugRemote=false;
   while (bt->available()) {
-
+     activity=true;
+     //REMEMBER DO MINIMUN THINGS HERE, OTHERWISE YOU WILL LOSE RX CHARS
      if (GLBSeriaPortBufferBTReady){
-       Serial.println(F("Buffer overrun in BT"));//. Lost char. Unprocessed previous string"));
+       Serial.println(F("Buffer overrun in BT")); //Lost char. Unprocessed previous string"));
        return;
      }
 
+     inChar = bt->read();
+     if ( (inChar < 0x20) || (GLBSerialPortBTIx >= MAX_INPUT_BUFFER)) {
+       /*DEBUG Serial.print(F("Char Rx from <0x20"));
+       Serial.println(inChar,HEX);*/
+       GLBSeriaPortBufferBTReady = true;
+       GLBSeriaPortBufferBT[GLBSerialPortBTIx]=0;
+       debugLocal=true;
+       debugRemote=true;
+       GLBSerialPortBTIx=0;
+       break;
+     }
+     GLBSeriaPortBufferBT[GLBSerialPortBTIx]=(char)inChar;
+     /* DEBUG Serial.print(F("Char Rx from BT:"));
+     Serial.print((char)inChar); 
+     Serial.print(GLBSeriaPortBufferBT[GLBSerialPortBTIx]);
+     Serial.print(F(". Pos:"));
+     Serial.print(GLBSerialPortBTIx); 
+     GLBSeriaPortBufferBT[GLBSerialPortBTIx+1]=0;
+     Serial.print(F(". So far:"));
+     printString(GLBSeriaPortBufferBT); */ 
+     GLBSerialPortBTIx++;
+  }
+
+  if (activity)
+  {
      if (GLBtimerBTActivity==-1){
         GLBtimerBTActivity=GLBtimers.setTimeout((long int)MS_TIMER_BT_ACTIVITY,GLBcallbackTimerBTActivity);
         char aux[2]={'X',0};
@@ -412,31 +441,10 @@ void serialEventBT() {
      else {
         GLBtimers.restartTimer(GLBtimerBTActivity);
      }
-     inChar = bt->read();
-     if ( (inChar < 0x20) || (GLBSerialPortBTIx >= MAX_INPUT_BUFFER)) {
-       /*DEBUG Serial.print(F("Char Rx from <0x20"));
-       Serial.println(inChar,HEX);*/
-       GLBSeriaPortBufferBTReady = true;
-       GLBSeriaPortBufferBT[GLBSerialPortBTIx]=0;
-       printString(GLBSeriaPortBufferBT);    //DEBUG LOCALLY
-       printStringBT(GLBSeriaPortBufferBT);  //DEBUG REMOTELY
-       GLBSerialPortBTIx=0;
-       return;
-     }
-     GLBSeriaPortBufferBT[GLBSerialPortBTIx]=(char)inChar;
-
-     /* DEBUG Serial.print(F("Char Rx from BT:"));
-     Serial.print((char)inChar); 
-     Serial.print(GLBSeriaPortBufferBT[GLBSerialPortBTIx]);
-     Serial.print(F(". Pos:"));
-     Serial.print(GLBSerialPortBTIx); 
-     GLBSeriaPortBufferBT[GLBSerialPortBTIx+1]=0;
-     Serial.print(F(". So far:"));
-     printString(GLBSeriaPortBufferBT); */
-     
-
-     GLBSerialPortBTIx++;
   }
+  if (debugLocal)  printString(GLBSeriaPortBufferBT);
+  if (debugRemote) printStringBT(GLBSeriaPortBufferBT);    
+
 }
 
 //-------------------------------------------------

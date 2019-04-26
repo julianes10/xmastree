@@ -12,6 +12,7 @@ import android.util.Log;
 import android.view.View;
 import android.widget.EditText;
 import android.widget.LinearLayout;
+import android.widget.SeekBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -19,6 +20,7 @@ import com.skydoves.colorpickerview.ColorEnvelope;
 import com.skydoves.colorpickerview.ColorPickerView;
 import com.skydoves.colorpickerview.listeners.ColorEnvelopeListener;
 import com.skydoves.colorpickerview.listeners.ColorListener;
+import com.skydoves.colorpickerview.sliders.BrightnessSlideBar;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -27,6 +29,8 @@ import java.util.LinkedList;
 import java.util.Queue;
 import java.util.Set;
 import java.util.UUID;
+import java.util.ArrayList;
+import java.util.Random;
 
 import static android.bluetooth.BluetoothAdapter.STATE_ON;
 
@@ -65,7 +69,11 @@ public class MainActivity extends AppCompatActivity {
     public static final int ST_XON = 2;
 
     int[] color= new int[]{0, 0, 0, 0};  //Argb
+    int pause;
 
+
+    ModeMagic mode=new ModeMagic();
+    SeekBar sbPause;
 
 
 
@@ -115,10 +123,22 @@ public class MainActivity extends AppCompatActivity {
         }
         setBtmac(aux);
         ColorPickerView colorPickerView = (ColorPickerView) findViewById(R.id.colorPickerView);
+
+
+        final BrightnessSlideBar brightnessSlideBar = findViewById(R.id.brightnessSlide);
+        colorPickerView.attachBrightnessSlider(brightnessSlideBar);
+
         colorPickerView.setColorListener(new ColorEnvelopeListener() {
             @Override
             public void onColorSelected(ColorEnvelope envelope, boolean fromUser) {
                 color=envelope.getArgb();
+                //Some saturation pls, it helps led strip:
+                for (int i=1;i<4;i++)
+                {
+                    if (color[i] > 0xE5) color[i]=0xFF;
+                    if (color[i] < 0x15) color[i]=0;
+                }
+                changeColor();
                 /*showRx("ColorEnvelopeListener:#"
                             + Integer.toHexString(envelope.getArgb()[0])
                             + Integer.toHexString(envelope.getArgb()[1])
@@ -126,6 +146,28 @@ public class MainActivity extends AppCompatActivity {
                             + Integer.toHexString(envelope.getArgb()[3]) );*/
             }
         });
+
+        sbPause=(SeekBar)findViewById(R.id.sbPause);
+        sbPause.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            int progressChangedValue = 0;
+
+            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                progressChangedValue = progress;
+                pause=progress;
+                if (d) Log.d("DXMASTREE", "onProgressChanged:" + progressChangedValue );
+
+            }
+
+            public void onStartTrackingTouch(SeekBar seekBar) {
+                if (d) Log.d("DXMASTREE", "onStartTrackingTouch:" + progressChangedValue );
+            }
+
+            public void onStopTrackingTouch(SeekBar seekBar) {
+                if (d) Log.d("DXMASTREE", "onStopTrackingTouch:" + progressChangedValue );
+            }
+        });
+
+
     }
 
     private void setBtmac (String d) {
@@ -321,22 +363,36 @@ public class MainActivity extends AppCompatActivity {
         ((EditText)(findViewById(R.id.etRxBox))).append(info);
     }
 
-
     public void changeMode(View view) {
-        try {
-                for (int i = 0; i < 1; i++) {
-                    String msg = ":LX:LT0000:LMA:LC" +
-                            String.format("%02X", color[1]) + "," +
-                            String.format("%02X", color[2]) + "," +
-                            String.format("%02X", color[3]);
-                    q.add(msg);
-                }
-        }
-        catch (Exception ex) {
-            if (d) Log.d("DXMASTREE", "Change mode  ");
-        }
+        mode.runMode();
+        /*
+        String msg = ":LX:LT0000:LMA:LC" +
+                  String.format("%02X", color[1]) + "," +
+                  String.format("%02X", color[2]) + "," +
+                  String.format("%02X", color[3]);
+                  q.add(msg);*/
     }
 
+
+    public void reset(View view){
+        String msg = ":LX";
+        q.add(msg);
+    }
+
+
+    public void changeColor() {
+        String msg = ":LC" +
+                String.format("%02X", color[1]) + "," +
+                String.format("%02X", color[2]) + "," +
+                String.format("%02X", color[3]);
+                q.add(msg);
+    }
+
+    public void changePause() {
+        String msg = ":LP" +
+                String.format("%04d",pause);
+        q.add(msg);
+    }
     @Override
     protected void onStart() {
         super.onStart();
@@ -347,9 +403,91 @@ public class MainActivity extends AppCompatActivity {
         timerActive=true;*/
     }
 
+    //--------------------------------------------------------------------------------------------//
+    /** Common interface for all modes */
+    public abstract class LedModeClass {
 
+        private Random rand = new Random();
+        protected ArrayList<LedMode> modes = new ArrayList<LedMode>();
 
+        /** Run a random mode */
+        public void runMode() {
+            int i = rand.nextInt(modes.size());
+            modes.get(i).run();
+        }
 
+    }
 
+    /** Common interface for all modes */
+    public interface LedMode {
+        void run();
+    }
 
+    public class ModeMagic extends LedModeClass {
+        public ModeMagic() {
+            modes.add(new LedMode() {
+                public void run () {
+                    // All leds color
+                    String msg = ":LX:LT0000:LMA";
+                    q.add(msg);
+                    changeColor();
+                }
+            });
+
+            modes.add(new LedMode() {
+                public void run () {
+                    // Rolling color
+                    String msg = ":LX:LT0000:LMC:LP0200";
+                    q.add(msg);
+                    changeColor();
+                }
+            });
+
+            modes.add(new LedMode() {
+                public void run () {
+                    // Rolling color - inverse
+                    String msg = ":LX:LT0000:LMc:LP0200";
+                    q.add(msg);
+                    changeColor();
+                }
+            });
+            modes.add(new LedMode() {
+                public void run () {
+                    // Noise color
+                    String msg = ":LX:LT0000:LMN:LP0200";
+                    q.add(msg);
+                }
+            });
+
+            modes.add(new LedMode() {
+                public void run () {
+                    // Noise color - inverse
+                    String msg = ":LX:LT0000:LMn:LP0200";
+                    q.add(msg);
+                    changeColor();
+                }
+            });
+
+            modes.add(new LedMode() {
+                public void run () {
+                    // Knight rider color
+                    String msg = ":LX:LT0000:LMK:LP0200";
+                    q.add(msg);
+                    changeColor();
+                }
+            });
+
+            modes.add(new LedMode() {
+                public void run () {
+                    // Knight rider color - inverse
+                    String msg = ":LX:LT0000:LMk:LP0200";
+                    q.add(msg);
+                    changeColor();
+                }
+            });
+        }
+    }
 }
+
+
+
